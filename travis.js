@@ -19,15 +19,15 @@ const requestOptions = {
 };
 
 // Matches "/subscribe [travis url]"
-bot.onText(/\/subscribe https:\/\/travis-ci.org\/(.+)\/(.+)/, (msg, match) => {
-    const [username, repo] = match.slice(1);
+bot.onText(/\/subscribe (.*)travis-ci.org\/(.[^\/]*)\/(.[^\/]*)/, (msg, match) => {
+    const [username, repo] = match.slice(2);
     addSubscription(msg.chat.id, username, repo);
 });
 
 // Matches "/unsubscribe [travis url]"
-bot.onText(/\/unsubscribe https:\/\/travis-ci.org\/(.+)\/(.+)/, (msg, match) => {
-    const [username, repo] = match.slice(1);
-    bot.sendMessage(msg.chat.id, `unfollowing username=${username} and repo=${repo}`); 
+bot.onText(/\/unsubscribe (.*)travis-ci.org\/(.[^\/]*)\/(.[^\/]*)/, (msg, match) => {
+    const [username, repo] = match.slice(2);
+	removeSubscription(msg.chat.id, username, repo);
 });
 
 // Matches "/list"
@@ -44,12 +44,12 @@ bot.onText(/(\/help|\/start)/, (msg, match) => {
         \`/subscribe [url]\`  -  for example \n\`/subscribe \
         https://travis-ci.org/facebook/react\`\n\n\
         You can see your subscriptions with command \`/list\`.\n\n\
-        You can unsubscribe with command \n\`/subscribe [url]\`  -  for example\
-        \n\`/subscribe https://travis-ci.org/facebook/react\``.replace(/        /g, '');
+        You can unsubscribe with command \n\`/unsubscribe [url]\`  -  for example\
+        \n\`/unsubscribe https://travis-ci.org/facebook/react\``.replace(/        /g, '');
     bot.sendMessage(msg.chat.id, helpText, { parse_mode: "markdown" });
 });
 
-const getSubscriptions = async chat_id => {
+const getSubscriptions = async (chat_id) => {
     const data = await fs.readFile('subscriptions.txt', 'utf-8');
     const repos = data.split('\n')
         .filter(line => line.startsWith(chat_id))
@@ -75,7 +75,7 @@ const addSubscription = async (chat_id, username, repoName) => {
     // Append repository to subscriptions
     fs.appendFile('subscriptions.txt', `${chat_id} ${username}/${repoName} ${repo.id} ${repo.last_build_id}\n`)
         .then(() => {
-            console.log("Subscription succefully added");
+            console.log(`ADD_SUBSCRIPTION: ${chat_id} ${username}/${repoName}`);
             const text = `Subscription added. Last build ${repo.last_build_state}`
             bot.sendMessage(chat_id, text);
         }).catch(error => {
@@ -84,10 +84,27 @@ const addSubscription = async (chat_id, username, repoName) => {
     });
 };
 
+const removeSubscription = async (chat_id, username, repoName) => {
+	const data = await fs.readFile('subscriptions.txt', 'utf-8');
+	let removed = false;
+	const lines = data.split('\n')
+        .map(line => {
+			if (line.startsWith(chat_id)
+			      && line.split(' ')[1] === `${username}/${repoName}`) {
+				line = '';
+				removed = true;
+		   }
+			return line;
+		}).filter(line => line.length > 5); // Remove empty lines
+		
+	fs.writeFile('subscriptions.txt', lines.join('\n') + '\n', 'utf-8');
+	let text = removed ? `${username}/${repoName} removed` : "Did not find that repo".
+   bot.sendMessage(chat_id, text);
+};
+
 const checkRepoUpdates = async () => {
     // Get current subscriptions and pair them by url and last build id
     const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    console.log(data);
     const baseUrl = 'https://api.travis-ci.org/builds?repository_id=';
     const repos =  data.split('\n')
         .filter(line => line.length > 2)
@@ -114,15 +131,11 @@ const checkRepoUpdates = async () => {
 }
 
 const broadcastRepoUpdates = async (build, commit, repoName) => {
-    console.log('broadcast');
     const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    console.log(build.repository_id)
-    console.log(data.split('\n').map(line => line.split(' ')[2]));
     const notifiedChats = data.split('\n')
         .filter(line => line.split(' ')[2] == build.repository_id)
         .map(line => line.split(' ')[0]);
 
-    console.log(notifiedChats);
     const text = `**New Travis-CI build on ${repoName}!**\n\
         Build #${build.number} ${build.state}.\n\
         **${commit.author_name}**: ${commit.message}\n\
