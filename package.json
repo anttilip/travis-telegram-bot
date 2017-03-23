@@ -5,17 +5,19 @@
   "main": "index.js",
   "scripts": {
     "start": "./node_modules/.bin/babel-node travis.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon travis.js --exec ./node_modules/.bin/babel-node"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "fs-promise": "^2.0.0",
     "node-telegram-bot-api": "^0.27.0",
     "request-promise-native": "^1.0.3"
   },
   "devDependencies": {
     "babel-cli": "^6.24.0",
     "babel-preset-latest": "^6.24.0",
-    "mysql": "^2.13.0"
+    "nodemon": "^1.11.0"
   }
 }
