@@ -4,7 +4,7 @@ import fs from 'fs';
 
 const TOKEN = process.env.TELEGRAM_TOKEN || '360404689:AAFRY7mnHyl2dLbK-FnYqo-BYBKwcZH-hz8';
 const botOptions = {
-  polling: true
+    polling: true
 };
 const bot = new TelegramBot(TOKEN, botOptions);
 
@@ -25,13 +25,13 @@ bot.onText(/\/unsubscribe https:\/\/travis-ci.org\/(.+)\/(.+)/, (msg, match) => 
 
 // Matches "/help
 bot.onText(/\/help/, (msg, match) => {
-   const helpText = `You can subscribe to any [Travis CI](https://travis-ci.org/)  \
-       project by sending a message \`/subscribe [url]\`, for example  \
-       \`/subscribe https://travis-ci.org/facebook/react\`\n\
-       You can see your subscriptions with command \`/list\`.\n\
-       You can unsubscribe with command \`/subscribe [url]\`, for example  \
-       \`/subscribe https://travis-ci.org/facebook/react\``.replace(/        /g, '');
-   bot.sendMessage(msg.chat.id, helpText, { parse_mode: "markdown" }); 
+    const helpText = `You can subscribe to any [Travis CI](https://travis-ci.org/)  \
+        project by sending a message\n\`/subscribe [url]\`, for example  \
+        \n\`/subscribe https://travis-ci.org/facebook/react\`\n\n\
+        You can see your subscriptions with command \`/list\`.\n\n\
+        You can unsubscribe with command \n\`/subscribe [url]\`, for example  \
+        \n\`/subscribe https://travis-ci.org/facebook/react\``.replace(/        /g, '');
+    bot.sendMessage(msg.chat.id, helpText, { parse_mode: "markdown" });
 });
 
 // Matches "/list"
@@ -57,8 +57,7 @@ const addSubscription = (chat_id, username, repo) => {
         method: 'GET',
         uri: `${apiBaseURL}/repos/${username}/${repo}`,
         json: true 
-  };
-    
+    };
     request(options)  
         .then(response => {
             console.log(response.id);
