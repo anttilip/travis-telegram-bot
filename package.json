@@ -1,0 +1,21 @@
+{
+  "name": "travis-telegram-bot",
+  "version": "0.0.1",
+  "description": "Telegram bot that reports about Travis CI builds",
+  "main": "index.js",
+  "scripts": {
+    "start": "./node_modules/.bin/babel-node travis.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.27.0",
+    "request-promise-native": "^1.0.3"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.24.0",
+    "babel-preset-latest": "^6.24.0",
+    "mysql": "^2.13.0"
+  }
+}
