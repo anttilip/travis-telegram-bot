@@ -1,163 +1,174 @@
-import TelegramBot from 'node-telegram-bot-api';
+"use strict";
+
+import Tgfancy from 'tgfancy'
 import request from 'request-promise-native';
-import fs from 'fs-promise';
+import db from 'sqlite';
+
+Promise.resolve()
+	// First, try connect to the database
+	.then(() => db.open('./travis-bot.db', { Promise }))
+	.catch(err => console.error(err.stack))
 
 const TOKEN = process.env.TELEGRAM_TOKEN || '360404689:AAFRY7mnHyl2dLbK-FnYqo-BYBKwcZH-hz8';
-const botOptions = {
-    polling: true
-};
-const bot = new TelegramBot(TOKEN, botOptions);
+const bot = new Tgfancy(TOKEN, { polling: true});
 
 const apiBaseURL = 'https://api.travis-ci.org';
 
 const requestOptions = {
-    method: 'GET',
-    headers: {
-        accept: 'application/vnd.travis-ci.2+json'
-    },
-    json: true
+	method: 'GET',
+	headers: {
+		accept: 'application/vnd.travis-ci.2+json'
+	},
+	json: true
 };
 
 // Matches "/subscribe [travis url]"
 bot.onText(/\/subscribe (.*)travis-ci.org\/(.[^\/]*)\/(.[^\/]*)/, (msg, match) => {
-    const [username, repo] = match.slice(2);
-    addSubscription(msg.chat.id, username, repo);
+	const [username, repo] = match.slice(2);
+	addSubscription(msg.chat.id, username, repo);
 });
 
 // Matches "/unsubscribe [travis url]"
 bot.onText(/\/unsubscribe (.*)travis-ci.org\/(.[^\/]*)\/(.[^\/]*)/, (msg, match) => {
-    const [username, repo] = match.slice(2);
+	const [username, repo] = match.slice(2);
 	removeSubscription(msg.chat.id, username, repo);
 });
 
 // Matches "/list"
-bot.onText(/\/list/, (msg, match) => {
-    const subscriptionList = getSubscriptions(msg.chat.id);
-    bot.sendMessage(msg.chat.id, 'Getting your subscriptions'); 
+bot.onText(/\/list/, async (msg, match) => {
+	const repos = await getChatsSubscriptions(msg.chat.id);
+	if (repos.length === 0) {
+		bot.sendMessage(msg.chat.id, "You have not subscibed to any repository");
+	} else {
+		const urls = repos.map(repo => `https://travis-ci.org/${repo.username}/${repo.name}`);
+		bot.sendMessage(msg.chat.id, urls.join('\n'));
+	}
 });
 
 // Matches "/help
 bot.onText(/(\/help|\/start)/, (msg, match) => {
-    const helpText = `I can send you a message every time Travis-CI runs a new \
-        build on repository you are subscribing to. You can subscribe to any \
-        [Travis CI](https://travis-ci.org/) project by sending a message:\n\
-        \`/subscribe [url]\`  -  for example \n\`/subscribe \
-        https://travis-ci.org/facebook/react\`\n\n\
-        You can see your subscriptions with command \`/list\`.\n\n\
-        You can unsubscribe with command \n\`/unsubscribe [url]\`  -  for example\
-        \n\`/unsubscribe https://travis-ci.org/facebook/react\``.replace(/        /g, '');
-    bot.sendMessage(msg.chat.id, helpText, { parse_mode: "markdown" });
+	const helpText = `I can send you a message every time Travis-CI runs a new \
+		build on repository you are subscribing to. You can subscribe to any \
+		[Travis CI](https://travis-ci.org/) project by sending a message:\n\
+		\`/subscribe [url]\`  -  for example \n\`/subscribe \
+		https://travis-ci.org/facebook/react\`\n\n\
+		You can see your subscriptions with command \`/list\`.\n\n\
+		You can unsubscribe with command \n\`/unsubscribe [url]\`  -  for example\
+		\n\`/unsubscribe https://travis-ci.org/facebook/react\``.replace(/		/g, '');
+	bot.sendMessage(msg.chat.id, helpText, { parse_mode: "markdown" });
 });
 
-const getSubscriptions = async (chat_id) => {
-    const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    const repos = data.split('\n')
-        .filter(line => line.startsWith(chat_id))
-        .map(line => 'https://travis-ci.org/' + line.split(' ')[1]);
-
-    bot.sendMessage(chat_id, repos.join('\n'));
+const getChatsSubscriptions = async (chat_id) => {
+	const repos = db.all(
+		`SELECT * FROM repos r
+		LEFT JOIN subscriptions s ON s.repo_id=r.id
+		WHERE s.chat_id = ?`, chat_id);
+	return repos;
 };
 
 const addSubscription = async (chat_id, username, repoName) => {
-    let repo = null;
-    // Get repo from API
-    try {
-        const options = Object.assign({}, requestOptions, 
-            {uri: `${apiBaseURL}/repos/${username}/${repoName}`});
-        const response = await request(options);
-        repo = response.repo;
-    } catch(error) {
-        console.error(error);
-        bot.sendMessage(chat_id, 'Not a valid repository');
-        return;
-    }
-    
-    // Append repository to subscriptions
-    fs.appendFile('subscriptions.txt', `${chat_id} ${username}/${repoName} ${repo.id} ${repo.last_build_id}\n`)
-        .then(() => {
-            console.log(`ADD_SUBSCRIPTION: ${chat_id} ${username}/${repoName}`);
-            const text = `Subscription added. Last build ${repo.last_build_state}`
-            bot.sendMessage(chat_id, text);
-        }).catch(error => {
-            console.error(error)
-            bot.sendMessage(chat_id, "Something went wrong while adding the subscription");
-    });
+	let repo = null;
+	// Get repo from API
+	try {
+		const options = Object.assign({}, requestOptions, 
+			{uri: `${apiBaseURL}/repos/${username}/${repoName}`});
+		const response = await request(options);
+		repo = response.repo;
+	} catch(error) {
+		console.error(error);
+		bot.sendMessage(chat_id, 'Not a valid repository');
+		return;
+	}
+
+	// Check if chat exists in database
+	const chat = await db.get(`SELECT 1 FROM chats WHERE id=${chat_id}`);
+	if (chat === undefined) {
+		// Add new chat to database
+		db.run(`INSERT OR IGNORE INTO chats VALUES (${chat_id})`);
+	} else {
+		// Check if chat is already subscribed to repo
+		const chatsRepos = await getChatsSubscriptions(chat_id);
+		if (chatsRepos.map(repo => repo.id).includes(repo.id)) {
+			// User is already subscribed
+			console.log('Already subscribed!')
+			bot.sendMessage(chat_id, 'Already subscribed!');
+			return;
+		}
+	}
+
+	// Add subscription to database
+	try {
+		await Promise.all([
+			// Add repo and subscription to database
+			db.run(`INSERT OR IGNORE INTO repos (id, username, name, build_id) VALUES 
+				(${repo.id}, '${username}', '${repoName}', ${repo.last_build_id})`),
+			db.run(`INSERT INTO subscriptions (chat_id, repo_id) VALUES 
+				(${chat_id}, ${repo.id})`)
+		]);
+		const text = `Subscription added. Last build ${repo.last_build_state}`
+		bot.sendMessage(chat_id, text);
+	} catch (err) {
+		console.error(err);
+		bot.sendMessage(chat_id, "Something went wrong while adding the subscription");
+	};
 };
 
 const removeSubscription = async (chat_id, username, repoName) => {
-	const data = await fs.readFile('subscriptions.txt', 'utf-8');
-	let removed = false;
-	const lines = data.split('\n')
-        .map(line => {
-			if (line.startsWith(chat_id)
-			      && line.split(' ')[1] === `${username}/${repoName}`) {
-				line = '';
-				removed = true;
-		   }
-			return line;
-		}).filter(line => line.length > 5); // Remove empty lines
-		
-	fs.writeFile('subscriptions.txt', lines.join('\n') + '\n', 'utf-8');
-	let text = removed ? `${username}/${repoName} removed` : "Did not find that repo".
-   bot.sendMessage(chat_id, text);
+	const repo = await db.get(`
+		SELECT id FROM repos 
+		WHERE username='${username}' AND name='${repoName}'`);
+
+	db.run(`
+		DELETE FROM subscriptions WHERE chat_id=${chat_id} AND repo_id=${repo.id}`)
+	.then(() => bot.sendMessage(chat_id, `${username}/${repoName} removed`))
+	.catch(err => {
+		console.error(err);
+		bot.sendMessage(chat_id, `Could not remove ${username}/${repoName}`);
+	});
 };
 
 const checkRepoUpdates = async () => {
-    // Get current subscriptions and pair them by url and last build id
-    const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    const baseUrl = 'https://api.travis-ci.org/builds?repository_id=';
-    const repos =  data.split('\n')
-        .filter(line => line.length > 2)
-        .map(line => {
-            const url = `${baseUrl}${line.split(' ')[2]}`;
-            const lastBuildId = line.split(' ')[3];
-            const repoName = line.split(' ')[1];
-            return [url, Number(lastBuildId), repoName];
-        });
-    
-    // Check if server has newer build
-    repos.forEach(repo => {
-        const [url, lastBuildId, repoName] = repo;
-        const options = Object.assign({}, requestOptions, {uri: url});
-        request(options).then(resp => {
-            const [build, commit] =  [resp.builds[0], resp.commits[0]];
-            if (build.id !== lastBuildId) {
-                console.log(`NEW_BUILD ${url} ${build.id} ${lastBuildId}`)
-                broadcastRepoUpdates(build, commit, repoName);
-                updatelastBuildId(repoName, build.id);
-            }
-        }).catch(console.error);
-    })
+	const repos = await db.all(`SELECT * FROM repos`)
+
+	repos.forEach(repo => {
+		const url = `${apiBaseURL}/builds?repository_id=${repo.id}`;
+		const options = Object.assign({}, requestOptions, {uri: url});
+
+		request(options).then(resp => {
+			const [build, commit] =  [resp.builds[0], resp.commits[0]];
+
+			if (build.id !== repo.build_id && build.state !== 'started') {
+				console.log(`NEW_BUILD ${url} ${build.id} ${repo.build_id}`)
+				broadcastRepoUpdates(build, commit, `${repo.username}/${repo.name}`);
+				updatelastBuildId(build.repository_id, build.id);
+			}
+		}).catch(console.error);
+	});
 }
 
 const broadcastRepoUpdates = async (build, commit, repoName) => {
-    const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    const notifiedChats = data.split('\n')
-        .filter(line => line.split(' ')[2] == build.repository_id)
-        .map(line => line.split(' ')[0]);
+	// Get all chats which are subscribed to receive updates for the repo.
+	const chats = await db.all(`
+		SELECT * FROM chats c
+		LEFT JOIN subscriptions s ON s.chat_id=c.id
+		WHERE s.repo_id=${build.repository_id}`);
 
-    const text = `**New Travis-CI build on ${repoName}!**\n\
-        Build #${build.number} ${build.state}.\n\
-        **${commit.author_name}**: ${commit.message}\n\
-        [Compare commits](${commit.compare_url}).`.replace(/        /g, '');;
+	const text = `*New Travis-CI build on ${repoName}!*\n\
+		Build #${build.number} ${build.state}.\n\
+		*${commit.author_name}*: ${commit.message}\n\
+		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
 
-    notifiedChats.forEach(chatId => {
-        bot.sendMessage(chatId, text, {parse_mode: 'markdown'});
-    });
+	chats.forEach(chat => {
+		bot.sendMessage(chat.chat_id, text, {parse_mode: 'markdown'});
+	});
 };
 
-const updatelastBuildId = async (repoName, buildId)  => {
-    const data = await fs.readFile('subscriptions.txt', 'utf-8');
-    const updatedLines = data.split('\n').map(line => {
-        const lineParts = line.split(' ');
-        if (lineParts[1] === repoName) {
-            lineParts.splice(3, 1, buildId);
-            line = lineParts.join(' ');
-        }
-       return line;
-    });
-
-    fs.writeFile('subscriptions.txt', updatedLines.join('\n'), 'utf-8');
+const updatelastBuildId = async (repoId, buildId)  => {
+	db.run(`
+		UPDATE repos
+		SET build_id=${buildId}
+		WHERE id=${repoId}
+	`);
 };
 
 setInterval(checkRepoUpdates, 120000);
