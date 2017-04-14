@@ -10,7 +10,10 @@ Promise.resolve()
 	.catch(err => console.error(err.stack))
 
 const TOKEN = process.env.TELEGRAM_TOKEN || '360404689:AAFRY7mnHyl2dLbK-FnYqo-BYBKwcZH-hz8';
-const bot = new Tgfancy(TOKEN, { polling: true});
+const PORT = process.env.PORT || 443;
+const url = process.env.WEBHOOK_URL || 'https://travis-tg-bot.herokuapp.com'
+const bot = new Tgfancy(TOKEN, { webHook: { port: PORT, host: HOST } });
+bot.setWebHook(`${url}/bot${TOKEN}`);
 
 const apiBaseURL = 'https://api.travis-ci.org';
 
