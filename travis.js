@@ -9,10 +9,10 @@ Promise.resolve()
 	.then(() => db.open('./travis-bot.db', { Promise }))
 	.catch(err => console.error(err.stack))
 
-const TOKEN = process.env.TELEGRAM_TOKEN || '360404689:AAFRY7mnHyl2dLbK-FnYqo-BYBKwcZH-hz8';
+const TOKEN = process.env.TELEGRAM_TOKEN || 'Your Telegram API Token';
 const PORT = process.env.PORT || 443;
 const HOST = process.env.HOST || '0.0.0.0';
-const url = process.env.WEBHOOK_URL || 'https://travis-tg-bot.herokuapp.com'
+const url = process.env.URL || 'https://travis-tg-bot.herokuapp.com'
 const bot = new Tgfancy(TOKEN, { webHook: { port: PORT, host: HOST } });
 bot.setWebHook(`${url}/bot${TOKEN}`);
 
@@ -94,7 +94,6 @@ const addSubscription = async (chat_id, username, repoName) => {
 		const chatsRepos = await getChatsSubscriptions(chat_id);
 		if (chatsRepos.map(repo => repo.id).includes(repo.id)) {
 			// User is already subscribed
-			console.log('Already subscribed!')
 			bot.sendMessage(chat_id, 'Already subscribed!');
 			return;
 		}
@@ -109,7 +108,7 @@ const addSubscription = async (chat_id, username, repoName) => {
 			db.run(`INSERT INTO subscriptions (chat_id, repo_id) VALUES 
 				(${chat_id}, ${repo.id})`)
 		]);
-		const text = `Subscription added. Last build ${repo.last_build_state}`
+		const text = `Subscription added. Last build ${repo.last_build_state}`;
 		bot.sendMessage(chat_id, text);
 	} catch (err) {
 		console.error(err);
@@ -132,7 +131,7 @@ const removeSubscription = async (chat_id, username, repoName) => {
 };
 
 const checkRepoUpdates = async () => {
-	const repos = await db.all(`SELECT * FROM repos`)
+	const repos = await db.all(`SELECT * FROM repos`);
 
 	repos.forEach(repo => {
 		const url = `${apiBaseURL}/builds?repository_id=${repo.id}`;
