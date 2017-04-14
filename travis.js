@@ -11,6 +11,7 @@ Promise.resolve()
 
 const TOKEN = process.env.TELEGRAM_TOKEN || '360404689:AAFRY7mnHyl2dLbK-FnYqo-BYBKwcZH-hz8';
 const PORT = process.env.PORT || 443;
+const HOST = process.env.HOST || '0.0.0.0';
 const url = process.env.WEBHOOK_URL || 'https://travis-tg-bot.herokuapp.com'
 const bot = new Tgfancy(TOKEN, { webHook: { port: PORT, host: HOST } });
 bot.setWebHook(`${url}/bot${TOKEN}`);
