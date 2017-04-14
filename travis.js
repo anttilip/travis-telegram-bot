@@ -2,12 +2,11 @@
 
 import Tgfancy from 'tgfancy'
 import request from 'request-promise-native';
-import db from 'sqlite';
+import pg from 'pg';
 
-Promise.resolve()
-	// First, try connect to the database
-	.then(() => db.open('./travis-bot.db', { Promise }))
-	.catch(err => console.error(err.stack))
+const DB_URL = process.env.DATABASE_URL;
+const client = new pg.Client(DB_URL);
+client.connect();
 
 const TOKEN = process.env.TELEGRAM_TOKEN || 'Your Telegram API Token';
 const PORT = process.env.PORT || 443;
@@ -63,11 +62,11 @@ bot.onText(/(\/help|\/start)/, (msg, match) => {
 });
 
 const getChatsSubscriptions = async (chat_id) => {
-	const repos = db.all(
-		`SELECT * FROM repos r
+	const repos = await client.query(`
+		SELECT * FROM repos r
 		LEFT JOIN subscriptions s ON s.repo_id=r.id
-		WHERE s.chat_id = ?`, chat_id);
-	return repos;
+		WHERE s.chat_id = ${chat_id}`)
+	return repos.rows;
 };
 
 const addSubscription = async (chat_id, username, repoName) => {
@@ -85,10 +84,12 @@ const addSubscription = async (chat_id, username, repoName) => {
 	}
 
 	// Check if chat exists in database
-	const chat = await db.get(`SELECT 1 FROM chats WHERE id=${chat_id}`);
-	if (chat === undefined) {
+	const chatExists = await client.query(`SELECT 1 FROM chats WHERE id=${chat_id}`)
+		.then(result => result.rowCount === 0 ? false : true);
+
+	if (!chatExists) {
 		// Add new chat to database
-		db.run(`INSERT OR IGNORE INTO chats VALUES (${chat_id})`);
+		client.query(`INSERT INTO chats VALUES (${chat_id})`);
 	} else {
 		// Check if chat is already subscribed to repo
 		const chatsRepos = await getChatsSubscriptions(chat_id);
@@ -103,10 +104,11 @@ const addSubscription = async (chat_id, username, repoName) => {
 	try {
 		await Promise.all([
 			// Add repo and subscription to database
-			db.run(`INSERT OR IGNORE INTO repos (id, username, name, build_id) VALUES 
-				(${repo.id}, '${username}', '${repoName}', ${repo.last_build_id})`),
-			db.run(`INSERT INTO subscriptions (chat_id, repo_id) VALUES 
-				(${chat_id}, ${repo.id})`)
+			client.query(`INSERT INTO repos (id, username, name, build_id) VALUES 
+				(${repo.id}, '${username}', '${repoName}', ${repo.last_build_id})
+				ON CONFLICT DO NOTHING`),
+			client.query(`INSERT INTO subscriptions (chat_id, repo_id) VALUES 
+				(${chat_id}, ${repo.id}) ON CONFLICT DO NOTHING`)
 		]);
 		const text = `Subscription added. Last build ${repo.last_build_state}`;
 		bot.sendMessage(chat_id, text);
@@ -117,11 +119,12 @@ const addSubscription = async (chat_id, username, repoName) => {
 };
 
 const removeSubscription = async (chat_id, username, repoName) => {
-	const repo = await db.get(`
-		SELECT id FROM repos 
-		WHERE username='${username}' AND name='${repoName}'`);
-
-	db.run(`
+	const repo = await client.query(`
+		SELECT * FROM repos 
+		WHERE username='${username}' AND name='${repoName}'`)
+	.then(result => result.rows[0]);
+	
+	client.query(`
 		DELETE FROM subscriptions WHERE chat_id=${chat_id} AND repo_id=${repo.id}`)
 	.then(() => bot.sendMessage(chat_id, `${username}/${repoName} removed`))
 	.catch(err => {
@@ -131,8 +134,9 @@ const removeSubscription = async (chat_id, username, repoName) => {
 };
 
 const checkRepoUpdates = async () => {
-	const repos = await db.all(`SELECT * FROM repos`);
-
+	const repos = await client.query(`SELECT * FROM repos`)
+		.then(result => result.rows);
+	
 	repos.forEach(repo => {
 		const url = `${apiBaseURL}/builds?repository_id=${repo.id}`;
 		const options = Object.assign({}, requestOptions, {uri: url});
@@ -151,27 +155,28 @@ const checkRepoUpdates = async () => {
 
 const broadcastRepoUpdates = async (build, commit, repoName) => {
 	// Get all chats which are subscribed to receive updates for the repo.
-	const chats = await db.all(`
+	const chats = await client.query(`
 		SELECT * FROM chats c
 		LEFT JOIN subscriptions s ON s.chat_id=c.id
-		WHERE s.repo_id=${build.repository_id}`);
-
+		WHERE s.repo_id=${build.repository_id}`)
+	.then(result => result.rows);
+	
 	const text = `*New Travis-CI build on ${repoName}!*\n\
 		Build #${build.number} ${build.state}.\n\
 		*${commit.author_name}*: ${commit.message}\n\
 		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
-
+	
 	chats.forEach(chat => {
 		bot.sendMessage(chat.chat_id, text, {parse_mode: 'markdown'});
 	});
 };
 
 const updatelastBuildId = async (repoId, buildId)  => {
-	db.run(`
+	client.query(`
 		UPDATE repos
 		SET build_id=${buildId}
 		WHERE id=${repoId}
 	`);
 };
 
-setInterval(checkRepoUpdates, 120000);
+setInterval(checkRepoUpdates, 5000);
