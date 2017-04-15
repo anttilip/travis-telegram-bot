@@ -144,8 +144,7 @@ const checkRepoUpdates = async () => {
 		request(options).then(resp => {
 			const [build, commit] =  [resp.builds[0], resp.commits[0]];
 
-			if (build.id !== repo.build_id && build.state !== 'created') {
-				console.log(`NEW_BUILD ${url} ${build.id} ${repo.build_id}`)
+			if (build.id !== repo.build_id && build.finished_at !== null) {
 				broadcastRepoUpdates(build, commit, `${repo.username}/${repo.name}`);
 				updatelastBuildId(build.repository_id, build.id);
 			}
@@ -179,4 +178,5 @@ const updatelastBuildId = async (repoId, buildId)  => {
 	`);
 };
 
+// Check if new builds are finished in Travis
 setInterval(checkRepoUpdates, 5000);
