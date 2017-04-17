@@ -178,11 +178,11 @@ const updatelastBuildId = async (repoId, buildId)  => {
 	`);
 };
 
-const getBuildEmoji = (build) => {
-	if (build.state === 'passed') return '🙌🎉';
-	else if (build.state === 'failed') return '☹️';
-	else if (build.state === 'errored') return '❌';
-	else return '🤷'
+const getBuildEmoji = (state) => {
+	if (state === 'passed') return '🙌🎉';
+	else if (state === 'failed') return '☹️';
+	else if (state === 'errored') return '❌';
+	else return '🤷';
 };
 
 // Check if new builds are finished in Travis
