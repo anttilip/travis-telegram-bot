@@ -164,8 +164,8 @@ const broadcastRepoUpdates = async (build, commit, repoName) => {
 	.then(result => result.rows);
 
 	const text = `*New build on ${repoName}!*\n\
-		Build #${build.number} ${build.state} ${getBuildEmoji(build.state)}.\n\
-		*${commit.author_name}*: ${commit.message}\n\
+		Build #${build.number} ${build.state} ${getBuildEmoji(build.state)}!\n\
+		*${commit.author_name}:* \`${commit.message}\`\n\
 		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
 
 	chats.forEach(chat => {
