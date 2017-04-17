@@ -159,9 +159,9 @@ const broadcastRepoUpdates = async (build, commit, repoName) => {
 		LEFT JOIN subscriptions s ON s.chat_id=c.id
 		WHERE s.repo_id=${build.repository_id}`)
 	.then(result => result.rows);
-	
-	const text = `*New Travis-CI build on ${repoName}!*\n\
-		Build #${build.number} ${build.state}.\n\
+
+	const text = `*New build on ${repoName}!*\n\
+		Build #${build.number} ${build.state} ${getBuildEmoji(build.state)}.\n\
 		*${commit.author_name}*: ${commit.message}\n\
 		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
 	
@@ -176,6 +176,13 @@ const updatelastBuildId = async (repoId, buildId)  => {
 		SET build_id=${buildId}
 		WHERE id=${repoId}
 	`);
+};
+
+const getBuildEmoji = (build) => {
+	if (build.state === 'passed') return '🙌🎉';
+	else if (build.state === 'failed') return '☹️';
+	else if (build.state === 'errored') return '❌';
+	else return '🤷'
 };
 
 // Check if new builds are finished in Travis
