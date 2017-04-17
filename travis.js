@@ -12,7 +12,10 @@ const TOKEN = process.env.TELEGRAM_TOKEN || 'Your Telegram API Token';
 const PORT = process.env.PORT || 443;
 const HOST = process.env.HOST || '0.0.0.0';
 const url = process.env.URL || 'https://travis-tg-bot.herokuapp.com'
-const bot = new Tgfancy(TOKEN, { webHook: { port: PORT, host: HOST } });
+const bot = new Tgfancy(TOKEN, {
+	webHook: { port: PORT, host: HOST },
+	tgfancy: { emojification: true }
+});
 bot.setWebHook(`${url}/bot${TOKEN}`);
 
 const apiBaseURL = 'https://api.travis-ci.org';
@@ -179,9 +182,9 @@ const updatelastBuildId = async (repoId, buildId)  => {
 };
 
 const getBuildEmoji = (state) => {
-	if (state === 'passed') return '🙌🎉';
-	else if (state === 'failed') return '☹️';
-	else if (state === 'errored') return '❌';
+	if (state === 'passed') return ':raised_hands::tada:';
+	else if (state === 'failed') return ':white_frowning_face:';
+	else if (state === 'errored') return ':x:';
 	else return '🤷';
 };
 
