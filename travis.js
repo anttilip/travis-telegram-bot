@@ -169,7 +169,13 @@ const broadcastRepoUpdates = async (build, commit, repoName) => {
 		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
 
 	chats.forEach(chat => {
-		bot.sendMessage(chat.chat_id, text, {parse_mode: 'markdown'});
+		bot.sendMessage(chat.chat_id, text, {parse_mode: 'markdown'})
+			.catch((err) => {
+				console.error("Broadcasting repo update failed:");
+				console.error(`chat_id: ${chat.chat_id}, text: ${text}`);
+				console.error(err.code);
+				console.error(err.response.body);
+			});
 	});
 };
 
