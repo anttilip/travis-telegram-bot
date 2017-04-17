@@ -44,7 +44,7 @@ bot.onText(/\/list/, async (msg, match) => {
 		bot.sendMessage(msg.chat.id, "You have not subscibed to any repository");
 	} else {
 		const urls = repos.map(repo => `https://travis-ci.org/${repo.username}/${repo.name}`);
-		bot.sendMessage(msg.chat.id, urls.join('\n'));
+		bot.sendMessage(msg.chat.id, `You are subscribed to following repositiories:\n${urls.join('\n')}`);
 	}
 });
 
@@ -164,7 +164,7 @@ const broadcastRepoUpdates = async (build, commit, repoName) => {
 		Build #${build.number} ${build.state} ${getBuildEmoji(build.state)}.\n\
 		*${commit.author_name}*: ${commit.message}\n\
 		[Compare commits](${commit.compare_url}).`.replace(/		/g, '');
-	
+
 	chats.forEach(chat => {
 		bot.sendMessage(chat.chat_id, text, {parse_mode: 'markdown'});
 	});
