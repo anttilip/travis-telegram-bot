@@ -9,3 +9,8 @@ With this little bot you can get real time build notifications on [Travis CI](ht
 4. You can list your subscriptions by typing `/list`
 
 The bot also works in group chats!
+
+### Contributing:
+All contributions and suggestions are welcome!
+
+To contribute, fork this repo and create a pull request.
